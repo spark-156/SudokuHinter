@@ -52,11 +52,14 @@ public class SudokuHinter {
         return this.hint;
     }
 
-    public void applyHint() {
+    public void applyHint() throws Exception {
         if (this.hint == null) return;
 
-        this.sudokuGame.board[this.hint.rowIndex()][this.hint.colIndex()] = this.hint.value();
-        this.sudokuGame.isValid();
+        this.sudokuGame.makeMove(
+                this.hint.rowIndex(),
+                this.hint.colIndex(),
+                this.hint.value()
+        );
     }
 
     // PRIVATE UNDER HERE

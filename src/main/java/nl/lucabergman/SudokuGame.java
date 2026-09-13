@@ -28,7 +28,15 @@ public class SudokuGame {
         return out.toString();
     }
 
+    public void makeMove(int ri, int ci, int value) throws Exception {
+        this.board[ri][ci] = value;
+        if (!isValidAt(ri, ci)) {
+            throw new Exception("Invalid move at: (" + ri + ", " + ci + ")");
+        }
+    }
+
     public boolean isValidAt(int rowIndex, int colIndex) {
+        // Check if a certain cell is valid. Use by making the move and then checking if it is valid.
         return isRowValid(rowIndex) && isColumnValid(colIndex) && isSubsectionValid(rowIndex, colIndex);
     }
 

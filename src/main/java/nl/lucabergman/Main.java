@@ -13,7 +13,7 @@ public class Main {
         IO.println(String.format("Took: %d ms", duration_in_ms));
     }
 
-    void main() {
+    void main() throws Exception {
 //        SudokuGame sudokuGame = new SudokuGame(new Integer[][]{
 //                {1,    null, null, 7,    null, null, null, null, null},
 //                {2,    null, null, null, null, null, null, null, null},
