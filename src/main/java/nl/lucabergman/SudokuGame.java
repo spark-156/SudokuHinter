@@ -7,23 +7,25 @@ public class SudokuGame {
         this.board = board;
     }
 
-    @Override
-    public String toString() {
-        StringBuilder sudoku = new StringBuilder();
+    public String describe() {
+        StringBuilder out = new StringBuilder();
+        String separator = "------+-------+------\n";
 
-        for (int i = 0; i < board.length; i++) {
-            for (int j = 0; j < board[i].length; j++) {
-                if (board[i][j] == null) {
-                    sudoku.append("  ");
-                } else {
-                    sudoku.append(board[i][j]);
-                    sudoku.append(" ");
-                }
+        for (int ri = 0; ri < 9; ri++) {
+            if (ri > 0 && ri % 3 == 0) {
+                out.append(separator);
             }
-            sudoku.append("\n");
+            for (int ci = 0; ci < 9; ci++) {
+                if (ci > 0 && ci % 3 == 0) {
+                    out.append("| ");
+                }
+                Integer cell = board[ri][ci];
+                out.append(cell == null ? "." : cell).append(" ");
+            }
+            out.setLength(out.length() - 1);
+            out.append('\n');
         }
-
-        return sudoku.toString();
+        return out.toString();
     }
 
     public boolean isValidAt(int rowIndex, int colIndex) {
@@ -43,6 +45,35 @@ public class SudokuGame {
         }
 
         return true;
+    }
+
+    public Integer[] getRow(int rowIndex) {
+        return this.board[rowIndex];
+    }
+
+    public Integer[] getCol(int colIndex) {
+        Integer[] col = new Integer[9];
+        for (int i = 0; i < 9; i++) {
+            col[i] = this.board[i][colIndex];
+        }
+        return col;
+    }
+
+    public Integer[] getBlock(int bi) {
+        int bri = (bi / 3) * 3;
+        int bci = (bi % 3) * 3;
+
+        Integer[] block = new Integer[9];
+        int blockIndex = 0;
+
+        for (int i = bri; i < bri + 3; i++) {
+            for (int j = bci; j < bci + 3; j++) {
+                block[blockIndex] = this.board[i][j];
+                blockIndex++;
+            }
+        }
+
+        return block;
     }
 
     private boolean hasDuplicates(Integer[] arr) {
