@@ -5,11 +5,13 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.stream.Collectors.*;
+
 public class SudokuGamePossibleValues {
     // implementation of full candidate notation for the SudokuGame
     // might be reimplemented in to the sudokugame instead of being its own object.
     @SuppressWarnings("unchecked")
-    private final Set<Integer>[][] possibleValues = new Set[9][9];
+    private final Set<Integer>[][] candidates = new Set[9][9];
     private SudokuGame sudokuGame;
 
     public SudokuGamePossibleValues(SudokuGame sudokuGame) {
@@ -20,7 +22,7 @@ public class SudokuGamePossibleValues {
 
 
     public void resetPossibleValues() {
-        for (Set<Integer>[] row : this.possibleValues) {
+        for (Set<Integer>[] row : this.candidates) {
             for (int col = 0; col < row.length; col++) {
                 row[col] = new HashSet<>();
             }
@@ -30,55 +32,188 @@ public class SudokuGamePossibleValues {
     public void fillPossibleValues(SudokuGame sudokuGame) {
         this.resetPossibleValues();
         // naively fill all possible values for all fields by checking if a move is valid or not.
-        // todo further implement box
-        for (int rowI = 0; rowI < 9; rowI++) {
-            for (int colI = 0; colI < 9; colI++) {
-                if (sudokuGame.board[rowI][colI] != null) continue;
+        for (int ri = 0; ri < 9; ri++) {
+            for (int ci = 0; ci < 9; ci++) {
+                if (sudokuGame.board[ri][ci] != null) continue;
 
-                for (int possibleValue = 1; possibleValue < 10; possibleValue++) {
-                    sudokuGame.board[rowI][colI] = possibleValue;
-                    if (sudokuGame.isValidAt(rowI, colI)) {
-                        this.possibleValues[rowI][colI].add(possibleValue);
+                for (int candidateValue = 1; candidateValue < 10; candidateValue++) {
+                    sudokuGame.board[ri][ci] = candidateValue;
+                    if (sudokuGame.isValidAt(ri, ci)) {
+                        this.candidates[ri][ci].add(candidateValue);
                     }
-                    sudokuGame.board[rowI][colI] = null;
+                    sudokuGame.board[ri][ci] = null;
                 }
             }
         }
+        while (this.findHiddenSets()) continue;
+//        this.findHiddenSets();
+
         this.sudokuGame = sudokuGame;
     }
 
-    public Map<Integer, Set<Integer>> possibleValuesToOccurences(Set<Integer>[] pvs) {
-        // list of sets to dictionary containing all indexes where that number occured in list
+//    private Coordinates getCoordsFromBlockListIndex(Coordinates coordinates) {
+//        // int dividing by int returns how many times it fits aka floorDiv if both signs are positive.
+//        return new Coordinates(coordinates.rowIndex() / 3, coordinates.columnIndex() / 3);
+//    }
+
+    private Coordinates getCoordsFromBlockListIndex(Coordinates blockPosition) {
+        int bi = blockPosition.rowIndex();
+        int li = blockPosition.columnIndex();
+        return new Coordinates((bi / 3) * 3 + li / 3, (bi % 3) * 3 + li % 3);
+    }
+
+    private boolean assertSubsetIsSmaller(Set<Integer> values, Set<Coordinates> coordinates) {
+        return coordinates.stream().anyMatch(coordinate -> this.candidates[coordinate.rowIndex()][coordinate.columnIndex()].size() > values.size());
+//
+//        for (Coordinates coordinate : coordinates) {
+//            Set<Integer> candidate = ;
+//            if (!candidate.containsAll(values) && candidate.size() > values.size()) return false;
+//        }
+//        return true;
+    }
+
+    private void filterRegions(Set<Integer> values, Set<Coordinates> coordinates) {
+        // give a set of candidates that are only allowed in a set of locations.
+        // this function will filter out all other candidates within the same region that may no longer house these values.
+        boolean is_row = coordinates.stream().allMatch(l -> l.rowIndex() == coordinates.iterator().next().rowIndex());
+        boolean is_col = coordinates.stream().allMatch(l -> l.columnIndex() == coordinates.iterator().next().columnIndex());
+        boolean is_block = coordinates.stream().allMatch(l -> getCoordsFromBlockListIndex(l).equals(getCoordsFromBlockListIndex(coordinates.iterator().next())));
+
+        if (is_row) {
+            int ri = coordinates.iterator().next().rowIndex();
+            for (int ci = 0; ci < 9; ci++) {
+                if (this.sudokuGame.board[ri][ci] != null) continue;
+                    // only keep the possible values.
+                else if (coordinates.contains(new Coordinates(ri, ci))) this.candidates[ri][ci] = values;
+                    // remove the candidates as they cannot be in this location
+                else this.candidates[ri][ci].removeAll(values);
+            }
+        }
+
+        if (is_col) {
+            int ci = coordinates.iterator().next().columnIndex();
+            for (int ri = 0; ri < 9; ri++) {
+                if (this.sudokuGame.board[ri][ci] != null) continue;
+                    // only keep the possible values.
+                else if (coordinates.contains(new Coordinates(ri, ci))) this.candidates[ri][ci] = values;
+                    // remove the candidates as they cannot be in this location
+                else this.candidates[ri][ci].removeAll(values);
+            }
+        }
+
+        if (is_block) {
+            Coordinates blockStartCoords = this.getCoordsFromBlockListIndex(coordinates.iterator().next());
+            for (int ri = blockStartCoords.rowIndex(); ri < blockStartCoords.rowIndex() + 3; ri++) {
+                for (int ci = blockStartCoords.columnIndex(); ci < blockStartCoords.columnIndex() + 3; ci++) {
+                    if (this.sudokuGame.board[ri][ci] != null) continue;
+                    else if (coordinates.contains(new Coordinates(ri, ci))) this.candidates[ri][ci] = values;
+                    else this.candidates[ri][ci].removeAll(values);
+                }
+            }
+        }
+    }
+
+    public boolean findHiddenSets() {
+        // returns true if it found a hidden set (re-run again)
+        // find hidden pairs in a sudoku
+        // assume possible values have already been set.
+
+        // loop over cols, rows and boxes and try to find naked pairs.
+        // caller of this function should keep calling until all options have been exhausted.
+        boolean foundHiddenSets = false;
+
+        // rows
+        for (int ri = 0; ri < 9; ri++) {
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(this.getRow(ri)); // map of value to what indexes it occurs at
+            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
+                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
+            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
+                // translate indexes of duplicates to coordinates and filter the regions.
+                Set<Coordinates> coords = new HashSet<>();
+                for (Integer ci : dupe.getKey()) {
+                    Coordinates coordinates = new Coordinates(ri, ci);
+                    coords.add(coordinates);
+                }
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetIsSmaller(dupe.getValue(), coords)) {
+                    filterRegions(dupe.getValue(), coords);
+                    foundHiddenSets = true;
+                }
+            }
+        }
+        // column
+        for (int ci = 0; ci < 9; ci++) {
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(this.getColumn(ci)); // map of value to what indexes it occurs at
+            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
+                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
+            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
+                // translate indexes of duplicates to coordinates and filter the regions.
+                Set<Coordinates> coords = new HashSet<>();
+                for (Integer ri : dupe.getKey()) {
+                    Coordinates coordinates = new Coordinates(ri, ci);
+                    coords.add(coordinates);
+                }
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetIsSmaller(dupe.getValue(), coords)) {
+                    filterRegions(dupe.getValue(), coords);
+                    foundHiddenSets = true;
+                }
+            }
+        }
+        // block
+        for (int bi = 0; bi < 9; bi++) {
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(this.getBlock(bi)); // map of value to what indexes it occurs at
+            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
+                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
+            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
+                // translate indexes of duplicates to coordinates and filter the regions.
+                Set<Coordinates> coords = new HashSet<>();
+                for (Integer li : dupe.getKey()) {
+                    int[] rici = this.sudokuGame.getRowColIndexFromBoxListIndex(bi, li);
+                    Coordinates coordinates = new Coordinates(rici[0], rici[1]);
+                    coords.add(coordinates);
+                }
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetIsSmaller(dupe.getValue(), coords)) {
+                    filterRegions(dupe.getValue(), coords);
+                    foundHiddenSets = true;
+                }
+            }
+        }
+        return foundHiddenSets;
+    }
+
+    public Map<Integer, Set<Integer>> candidateOccurrences(Set<Integer>[] candidates) {
+        // list of sets to dictionary containing all indexes where that number occurred in list
         // possible value : set of indexes of occurrences
         Map<Integer, Set<Integer>> dict = new HashMap<>();
         // loop over list of sets.
         for (int i = 0; i < 9; i++) {
             // loop over values of set and add index of occurrence
-            for (Integer pv : pvs[i]) {
-                Set<Integer> is = dict.get(pv);
-                if (is == null) is = new HashSet<>();
-                is.add(i);
-                dict.put(pv, is);
+            for (Integer candidate : candidates[i]) {
+                Set<Integer> occurrences = dict.get(candidate);
+                if (occurrences == null) occurrences = new HashSet<>();
+                occurrences.add(i);
+                dict.put(candidate, occurrences);
             }
         }
         return dict;
     }
 
     public Set<Integer> getCell(int ri, int ci) {
-        return this.possibleValues[ri][ci];
+        return this.candidates[ri][ci];
     }
 
     public Set<Integer>[] getRow(int ri) {
-        return this.possibleValues[ri];
+        return this.candidates[ri];
     }
+
 
     public Set<Integer>[] getColumn(int ci) {
         Set<Integer>[] col = new Set[9];
         for (int i = 0; i < 9; i++) {
-            col[i] = this.possibleValues[i][ci];
+            col[i] = this.candidates[i][ci];
         }
         return col;
     }
+
 
     public Set<Integer>[] getBlock(int bi) {
         int bri = (bi / 3) * 3;
@@ -89,7 +224,7 @@ public class SudokuGamePossibleValues {
 
         for (int i = bri; i < bri + 3; i++) {
             for (int j = bci; j < bci + 3; j++) {
-                block[blockIndex] = this.possibleValues[i][j];
+                block[blockIndex] = this.candidates[i][j];
                 blockIndex++;
             }
         }

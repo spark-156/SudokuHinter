@@ -62,14 +62,6 @@ public class SudokuHinter {
         );
     }
 
-    // PRIVATE UNDER HERE
-    private int[] getRowColIndexFromBoxListIndex(int bi, int li) {
-        int ri = bi % 3 * 3 + li % 3;
-        int ci = bi % 3 * 3 + li % 3;
-
-        return new int[]{ri, ci};
-    }
-
     private Integer[] getMissingValues(Integer[] list) {
         // return a list of ints that are missing in the Integer list assuming list is 1 till 9
         HashSet<Integer> missing = new HashSet<>(Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9));
@@ -103,11 +95,11 @@ public class SudokuHinter {
         for (int bi = 0; bi < 9; bi++) {
             Set<Integer>[] block = this.possibleValues.getBlock(bi);
 
-            Map<Integer, Set<Integer>> occurrences = this.possibleValues.possibleValuesToOccurences(block);
+            Map<Integer, Set<Integer>> occurrences = this.possibleValues.candidateOccurrences(block);
             for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
                 if (occ.getValue().size() == 1) {
                     // only occured in one spot! lets gooo
-                    var ii = this.getRowColIndexFromBoxListIndex(bi, occ.getValue().iterator().next());
+                    var ii = this.sudokuGame.getRowColIndexFromBoxListIndex(bi, occ.getValue().iterator().next());
                     return new Hint(ii[0], ii[1], occ.getKey(), HintLocation.BLOCK, HintType.HIDDEN_SINGLE);
                 }
             }
@@ -116,7 +108,7 @@ public class SudokuHinter {
         for (int ri = 0; ri < 9; ri++) {
             Set<Integer>[] row = this.possibleValues.getRow(ri);
 
-            Map<Integer, Set<Integer>> occurrences = this.possibleValues.possibleValuesToOccurences(row);
+            Map<Integer, Set<Integer>> occurrences = this.possibleValues.candidateOccurrences(row);
             for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
                 if (occ.getValue().size() == 1) {
                     // only occured in one spot! lets gooo
@@ -128,7 +120,7 @@ public class SudokuHinter {
         for (int ci = 0; ci < 9; ci++) {
             Set<Integer>[] row = this.possibleValues.getColumn(ci);
 
-            Map<Integer, Set<Integer>> occurrences = this.possibleValues.possibleValuesToOccurences(row);
+            Map<Integer, Set<Integer>> occurrences = this.possibleValues.candidateOccurrences(row);
             for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
                 if (occ.getValue().size() == 1) {
                     // only occured in one spot! lets gooo
