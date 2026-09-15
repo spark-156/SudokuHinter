@@ -9,7 +9,7 @@ import static java.util.stream.Collectors.*;
 
 public class SudokuGamePossibleValues {
     // implementation of full candidate notation for the SudokuGame
-    // might be reimplemented in to the sudokugame instead of being its own object.
+    // might be reimplemented in to the Sudoku instead of being its own object.
     @SuppressWarnings("unchecked")
     private final Set<Integer>[][] candidates = new Set[9][9];
     private SudokuGame sudokuGame;
@@ -45,31 +45,15 @@ public class SudokuGamePossibleValues {
                 }
             }
         }
+        // todo each hidden set really already is a hint ^^
         while (this.findHiddenSets()) continue;
 //        this.findHiddenSets();
 
         this.sudokuGame = sudokuGame;
     }
 
-//    private Coordinates getCoordsFromBlockListIndex(Coordinates coordinates) {
-//        // int dividing by int returns how many times it fits aka floorDiv if both signs are positive.
-//        return new Coordinates(coordinates.rowIndex() / 3, coordinates.columnIndex() / 3);
-//    }
-
-    private Coordinates getCoordsFromBlockListIndex(Coordinates blockPosition) {
-        int bi = blockPosition.rowIndex();
-        int li = blockPosition.columnIndex();
-        return new Coordinates((bi / 3) * 3 + li / 3, (bi % 3) * 3 + li % 3);
-    }
-
     private boolean assertSubsetIsSmaller(Set<Integer> values, Set<Coordinates> coordinates) {
         return coordinates.stream().anyMatch(coordinate -> this.candidates[coordinate.rowIndex()][coordinate.columnIndex()].size() > values.size());
-//
-//        for (Coordinates coordinate : coordinates) {
-//            Set<Integer> candidate = ;
-//            if (!candidate.containsAll(values) && candidate.size() > values.size()) return false;
-//        }
-//        return true;
     }
 
     private void filterRegions(Set<Integer> values, Set<Coordinates> coordinates) {
@@ -77,7 +61,7 @@ public class SudokuGamePossibleValues {
         // this function will filter out all other candidates within the same region that may no longer house these values.
         boolean is_row = coordinates.stream().allMatch(l -> l.rowIndex() == coordinates.iterator().next().rowIndex());
         boolean is_col = coordinates.stream().allMatch(l -> l.columnIndex() == coordinates.iterator().next().columnIndex());
-        boolean is_block = coordinates.stream().allMatch(l -> getCoordsFromBlockListIndex(l).equals(getCoordsFromBlockListIndex(coordinates.iterator().next())));
+        boolean is_block = coordinates.stream().allMatch(l -> l.getBlockStartCoordinates().equals(coordinates.iterator().next().getBlockStartCoordinates()));
 
         if (is_row) {
             int ri = coordinates.iterator().next().rowIndex();
@@ -102,7 +86,7 @@ public class SudokuGamePossibleValues {
         }
 
         if (is_block) {
-            Coordinates blockStartCoords = this.getCoordsFromBlockListIndex(coordinates.iterator().next());
+            Coordinates blockStartCoords = coordinates.iterator().next().getBlockStartCoordinates();
             for (int ri = blockStartCoords.rowIndex(); ri < blockStartCoords.rowIndex() + 3; ri++) {
                 for (int ci = blockStartCoords.columnIndex(); ci < blockStartCoords.columnIndex() + 3; ci++) {
                     if (this.sudokuGame.board[ri][ci] != null) continue;
@@ -115,7 +99,7 @@ public class SudokuGamePossibleValues {
 
     public boolean findHiddenSets() {
         // returns true if it found a hidden set (re-run again)
-        // find hidden pairs in a sudoku
+        // find hidden pairs in a Sudoku
         // assume possible values have already been set.
 
         // loop over cols, rows and boxes and try to find naked pairs.
@@ -167,9 +151,7 @@ public class SudokuGamePossibleValues {
                 // translate indexes of duplicates to coordinates and filter the regions.
                 Set<Coordinates> coords = new HashSet<>();
                 for (Integer li : dupe.getKey()) {
-                    int[] rici = this.sudokuGame.getRowColIndexFromBoxListIndex(bi, li);
-                    Coordinates coordinates = new Coordinates(rici[0], rici[1]);
-                    coords.add(coordinates);
+                    coords.add(new BlockListCoordinates(bi, li).getCoordinates());
                 }
                 if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetIsSmaller(dupe.getValue(), coords)) {
                     filterRegions(dupe.getValue(), coords);

@@ -128,11 +128,4 @@ public class SudokuGame {
 
         return !hasDuplicates(block);
     }
-
-    public int[] getRowColIndexFromBoxListIndex(int bi, int li) {
-        int ri = (bi / 3) * 3 + li / 3;
-        int ci = (bi % 3) * 3 + li % 3;
-
-        return new int[]{ri, ci};
-    }
 }

@@ -1,6 +1,9 @@
 package nl.lucabergman;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class SudokuHinter {
@@ -55,22 +58,7 @@ public class SudokuHinter {
     public void applyHint() throws Exception {
         if (this.hint == null) return;
 
-        this.sudokuGame.makeMove(
-                this.hint.rowIndex(),
-                this.hint.colIndex(),
-                this.hint.value()
-        );
-    }
-
-    private Integer[] getMissingValues(Integer[] list) {
-        // return a list of ints that are missing in the Integer list assuming list is 1 till 9
-        HashSet<Integer> missing = new HashSet<>(Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-        for (Integer integer : list) {
-            missing.remove(integer);
-        }
-
-        return missing.toArray(new Integer[0]);
+        this.sudokuGame.makeMove(this.hint.rowIndex(), this.hint.colIndex(), this.hint.value());
     }
 
 
@@ -98,9 +86,8 @@ public class SudokuHinter {
             Map<Integer, Set<Integer>> occurrences = this.possibleValues.candidateOccurrences(block);
             for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
                 if (occ.getValue().size() == 1) {
-                    // only occured in one spot! lets gooo
-                    var ii = this.sudokuGame.getRowColIndexFromBoxListIndex(bi, occ.getValue().iterator().next());
-                    return new Hint(ii[0], ii[1], occ.getKey(), HintLocation.BLOCK, HintType.HIDDEN_SINGLE);
+                    Coordinates coordinates = new BlockListCoordinates(bi, occ.getValue().iterator().next()).getCoordinates();
+                    return new Hint(coordinates.rowIndex(), coordinates.columnIndex(), occ.getKey(), HintLocation.BLOCK, HintType.HIDDEN_SINGLE);
                 }
             }
         }
@@ -111,7 +98,6 @@ public class SudokuHinter {
             Map<Integer, Set<Integer>> occurrences = this.possibleValues.candidateOccurrences(row);
             for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
                 if (occ.getValue().size() == 1) {
-                    // only occured in one spot! lets gooo
                     return new Hint(ri, occ.getValue().iterator().next(), occ.getKey(), HintLocation.ROW, HintType.HIDDEN_SINGLE);
                 }
             }
@@ -123,7 +109,6 @@ public class SudokuHinter {
             Map<Integer, Set<Integer>> occurrences = this.possibleValues.candidateOccurrences(row);
             for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
                 if (occ.getValue().size() == 1) {
-                    // only occured in one spot! lets gooo
                     return new Hint(occ.getValue().iterator().next(), ci, occ.getKey(), HintLocation.COLUMN, HintType.HIDDEN_SINGLE);
                 }
             }
