@@ -65,7 +65,7 @@ public class Main {
         SudokuHinter sh = new SudokuHinter(sudokuGame);
 
         IO.println(sh.describe());
-        IO.println(sh.possibleValues.toString());
+        IO.println(sh.possibleValues.describe());
 
 //        while (sh.findHint() != null) {
 //            IO.println(sh.possibleValues.toString());

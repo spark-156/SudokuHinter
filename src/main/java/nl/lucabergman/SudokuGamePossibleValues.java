@@ -233,48 +233,36 @@ public class SudokuGamePossibleValues {
     }
 
 
-    @Override
-    public String toString() {
-        StringBuilder sudoku = new StringBuilder();
-
-        sudoku.append("------------------------------------------------------------------------------------\n");
+    public String describe() {
+        String thinLine = "-".repeat(79) + "\n";
+        String thickLine = "=".repeat(79) + "\n";
+        StringBuilder stringBuilder = new StringBuilder(thickLine);
 
         for (int ri = 0; ri < 9; ri++) {
-            // inside row
             for (int loopi = 0; loopi < 3; loopi++) {
-                // go over each col 3 times to print all 9 possible values
-                sudoku.append(" | ");
+                stringBuilder.append(" || ");
                 for (int ci = 0; ci < 9; ci++) {
-                    // inside row AND col.
-                    // check if already filled.
                     if (this.sudokuGame.board[ri][ci] != null) {
-                        if (loopi == 0 || loopi == 2) {
-                            sudoku.append("  .   ");
+                        if (loopi == 1) {
+                            stringBuilder.append(String.format(". %d . ", this.sudokuGame.board[ri][ci]));
                         } else {
-                            sudoku.append(String.format(". %d . ", this.sudokuGame.board[ri][ci]));
+                            stringBuilder.append("  .   ");
                         }
                     } else {
-                        // print the possible values.
                         for (int pv = loopi * 3; pv < loopi * 3 + 3; pv++) {
-                            // find the possible values.
                             if (this.getCell(ri, ci).contains(pv + 1)) {
-                                sudoku.append(pv + 1);
-                                sudoku.append(" ");
+                                stringBuilder.append(pv + 1).append(" ");
                             } else {
-                                sudoku.append("  ");
+                                stringBuilder.append("  ");
                             }
                         }
                     }
-
-                    sudoku.append("| ");
+                    stringBuilder.append(ci % 3 == 2 ? "|| " : "| ");
                 }
-
-                sudoku.append("\n");
+                stringBuilder.append("\n");
             }
-
-            sudoku.append("------------------------------------------------------------------------------------\n");
+            stringBuilder.append(ri % 3 == 2 ? thickLine : thinLine);
         }
-
-        return sudoku.toString();
+        return stringBuilder.toString();
     }
 }
