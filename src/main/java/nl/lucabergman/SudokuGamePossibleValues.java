@@ -1,9 +1,6 @@
 package nl.lucabergman;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static java.util.stream.Collectors.*;
 
@@ -45,15 +42,24 @@ public class SudokuGamePossibleValues {
                 }
             }
         }
-        // todo each hidden set really already is a hint ^^
-        while (this.findHiddenSets()) continue;
-//        this.findHiddenSets();
+        // todo each hidden set really already is a hint ^^ create a hint stack?
+        this.findHiddenSets();
 
         this.sudokuGame = sudokuGame;
     }
 
-    private boolean assertSubsetIsSmaller(Set<Integer> values, Set<Coordinates> coordinates) {
-        return coordinates.stream().anyMatch(coordinate -> this.candidates[coordinate.rowIndex()][coordinate.columnIndex()].size() > values.size());
+    private boolean assertSubsetOfRegion(Set<Integer> foundSet, Set<Integer>[] candidates) {
+        // Size doesnt matter, removing other candidates does.
+
+        for (Set<Integer> candidate : candidates) {
+            if (candidate.isEmpty() || candidate.equals(foundSet)) continue;
+            Set<Integer> diffSet = new HashSet<>(candidate);
+            diffSet.removeAll(foundSet);
+            if (candidate.size() != diffSet.size()) return true;
+        }
+        return false;
+//        return Arrays.stream(candidates).anyMatch(candidate -> candidate.size() < size);
+//        return coordinates.stream().anyMatch(coordinate -> this.candidates[coordinate.rowIndex()][coordinate.columnIndex()].size() > values.size());
     }
 
     private void filterRegions(Set<Integer> values, Set<Coordinates> coordinates) {
@@ -97,18 +103,19 @@ public class SudokuGamePossibleValues {
         }
     }
 
-    public boolean findHiddenSets() {
+    public void findHiddenSets() {
         // returns true if it found a hidden set (re-run again)
         // find hidden pairs in a Sudoku
         // assume possible values have already been set.
 
         // loop over cols, rows and boxes and try to find naked pairs.
         // caller of this function should keep calling until all options have been exhausted.
-        boolean foundHiddenSets = false;
+        boolean foundHiddenSet = false;
 
         // rows
         for (int ri = 0; ri < 9; ri++) {
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(this.getRow(ri)); // map of value to what indexes it occurs at
+            Set<Integer>[] row = this.getRow(ri);
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(row); // map of value to what indexes it occurs at
             Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
                     .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
             for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
@@ -118,15 +125,17 @@ public class SudokuGamePossibleValues {
                     Coordinates coordinates = new Coordinates(ri, ci);
                     coords.add(coordinates);
                 }
-                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetIsSmaller(dupe.getValue(), coords)) {
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), row)) {
+                    // also assert that the row or col or block is not completely filled yet.
                     filterRegions(dupe.getValue(), coords);
-                    foundHiddenSets = true;
+                    foundHiddenSet = true;
                 }
             }
         }
         // column
         for (int ci = 0; ci < 9; ci++) {
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(this.getColumn(ci)); // map of value to what indexes it occurs at
+            Set<Integer>[] col = this.getColumn(ci);
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(col); // map of value to what indexes it occurs at
             Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
                     .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
             for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
@@ -136,15 +145,16 @@ public class SudokuGamePossibleValues {
                     Coordinates coordinates = new Coordinates(ri, ci);
                     coords.add(coordinates);
                 }
-                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetIsSmaller(dupe.getValue(), coords)) {
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), col)) {
                     filterRegions(dupe.getValue(), coords);
-                    foundHiddenSets = true;
+                    foundHiddenSet = true;
                 }
             }
         }
         // block
         for (int bi = 0; bi < 9; bi++) {
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(this.getBlock(bi)); // map of value to what indexes it occurs at
+            Set<Integer>[] block = this.getBlock(bi);
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(block); // map of value to what indexes it occurs at
             Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
                     .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
             for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
@@ -153,13 +163,14 @@ public class SudokuGamePossibleValues {
                 for (Integer li : dupe.getKey()) {
                     coords.add(new BlockListCoordinates(bi, li).getCoordinates());
                 }
-                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetIsSmaller(dupe.getValue(), coords)) {
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), block)) {
                     filterRegions(dupe.getValue(), coords);
-                    foundHiddenSets = true;
+                    foundHiddenSet = true;
                 }
             }
         }
-        return foundHiddenSets;
+
+        if (foundHiddenSet) this.findHiddenSets();
     }
 
     public Map<Integer, Set<Integer>> candidateOccurrences(Set<Integer>[] candidates) {
