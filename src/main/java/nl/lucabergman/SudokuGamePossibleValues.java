@@ -1,6 +1,9 @@
 package nl.lucabergman;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static java.util.stream.Collectors.*;
 
@@ -69,8 +72,10 @@ public class SudokuGamePossibleValues {
         boolean is_col = coordinates.stream().allMatch(l -> l.columnIndex() == coordinates.iterator().next().columnIndex());
         boolean is_block = coordinates.stream().allMatch(l -> l.getBlockStartCoordinates().equals(coordinates.iterator().next().getBlockStartCoordinates()));
 
+        Coordinates firstCoordinates = coordinates.iterator().next();
+
         if (is_row) {
-            int ri = coordinates.iterator().next().rowIndex();
+            int ri = firstCoordinates.rowIndex();
             for (int ci = 0; ci < 9; ci++) {
                 if (this.sudokuGame.board[ri][ci] != null) continue;
                     // only keep the possible values.
@@ -81,7 +86,7 @@ public class SudokuGamePossibleValues {
         }
 
         if (is_col) {
-            int ci = coordinates.iterator().next().columnIndex();
+            int ci = firstCoordinates.columnIndex();
             for (int ri = 0; ri < 9; ri++) {
                 if (this.sudokuGame.board[ri][ci] != null) continue;
                     // only keep the possible values.
@@ -92,7 +97,7 @@ public class SudokuGamePossibleValues {
         }
 
         if (is_block) {
-            Coordinates blockStartCoords = coordinates.iterator().next().getBlockStartCoordinates();
+            Coordinates blockStartCoords = firstCoordinates.getBlockStartCoordinates();
             for (int ri = blockStartCoords.rowIndex(); ri < blockStartCoords.rowIndex() + 3; ri++) {
                 for (int ci = blockStartCoords.columnIndex(); ci < blockStartCoords.columnIndex() + 3; ci++) {
                     if (this.sudokuGame.board[ri][ci] != null) continue;
