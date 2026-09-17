@@ -59,16 +59,27 @@ public class Main {
 //                {null, null, null, null, null, null, null, 1,    null},
 //                {null, null, null, 6,    null, 7,    null, 5,    2},
 //        });
+//        SudokuGame sudokuGame = new SudokuGame(new Integer[][]{
+//                {9,    2,    null, 8,    4,    3,    1,    null, 5   },
+//                {null, 5,    8,    7,    9,    1,    null, 2,    null},
+//                {null, 4,    1,    2,    5,    6,    null, null, 8},
+//                {4,    7,    9,    1,    null, 2,    5,    null, 3},
+//                {null, 8,    null, 9,    null, 5,    7,    null, null},
+//                {null, 6,    null, null, 7,    null, 2,    null, null},
+//                {null, 1,    null, null, 2,    null, null, null, 7},
+//                {null, null, null, 5,    null, null, null, 1,    null},
+//                {8,    null, 4,    6,    1,    7,    null, 5,    2},
+//        });
         SudokuGame sudokuGame = new SudokuGame(new Integer[][]{
-                {9,    2,    null, 8,    4,    3,    1,    null, 5   },
-                {null, 5,    8,    7,    9,    1,    null, 2,    null},
-                {null, 4,    1,    2,    5,    6,    null, null, 8},
-                {4,    7,    9,    1,    null, 2,    5,    null, 3},
-                {null, 8,    null, 9,    null, 5,    7,    null, null},
-                {null, 6,    null, null, 7,    null, 2,    null, null},
-                {null, 1,    null, null, 2,    null, null, null, 7},
-                {null, null, null, 5,    null, null, null, 1,    null},
-                {8,    null, 4,    6,    1,    7,    null, 5,    2},
+                {4, 1, 5, 2, 9, null, null, 6, null,},
+                {null, null, 8, 6, 4, 5, null, 1, null,},
+                {null, null, 2, 8, null, null, 5, 4, 9},
+                {null, null, null, 1, null, null, 6, 2, null},
+                {null, null, 4, null, 2, 9, null, 8,1},
+                {2, 8, 1, 3, 6, null, null, null, 5},
+                {null, 5, null, 4, null, null, 2, null, 6},
+                {null, 4, 6, 9, null, 2, null, 5, null},
+                {8, 2, null, null, null, 6, null, null, null},
         });
 //        SudokuGamePossibleValues sgpv = new SudokuGamePossibleValues(sudokuGame);
 //        IO.println(sgpv.toString());
@@ -76,11 +87,9 @@ public class Main {
         SudokuHinter sh = new SudokuHinter(sudokuGame);
 
         IO.println(sh.describe());
-        IO.println(sh.possibleValues.describe());
 
         IO.println("Finding hints.");
         while (sh.findHint() != null) {
-            IO.println(sh.possibleValues.describe());
             IO.println(sh.hint.describe());
             IO.println(sh.describe());
 

@@ -28,16 +28,16 @@ public class SudokuGame {
         return out.toString();
     }
 
-    public void makeMove(int ri, int ci, int value) throws Exception {
-        this.board[ri][ci] = value;
-        if (!isValidAt(ri, ci)) {
-            throw new Exception("Invalid move at: (" + ri + ", " + ci + ")");
+    public void makeMove(Coordinates cell, int value) throws Exception {
+        this.board[cell.rowIndex()][cell.columnIndex()] = value;
+        if (!isValidAt(cell)) {
+            throw new Exception("Invalid move at: (" + cell.rowIndex() + ", " + cell.columnIndex() + ")");
         }
     }
 
-    public boolean isValidAt(int rowIndex, int colIndex) {
+    public boolean isValidAt(Coordinates cell) {
         // Check if a certain cell is valid. Use by making the move and then checking if it is valid.
-        return isRowValid(rowIndex) && isColumnValid(colIndex) && isSubsectionValid(rowIndex, colIndex);
+        return isRowValid(cell.rowIndex()) && isColumnValid(cell.columnIndex()) && isSubsectionValid(cell.rowIndex(), cell.columnIndex());
     }
 
     public boolean isValid() {
@@ -53,6 +53,14 @@ public class SudokuGame {
         }
 
         return true;
+    }
+
+    public void setCell(Coordinates coordinates, Integer value) {
+        this.board[coordinates.rowIndex()][coordinates.columnIndex()] = value;
+    }
+
+    public Integer getCell(Coordinates coordinates) {
+        return this.board[coordinates.rowIndex()][coordinates.columnIndex()];
     }
 
     public Integer[] getRow(int rowIndex) {
@@ -113,6 +121,7 @@ public class SudokuGame {
     }
 
     private boolean isSubsectionValid(int rowIndex, int colIndex) {
+        // replace row and col index with block coordinates record.
         int blockRowIndex = Math.floorDiv(rowIndex, 3) * 3;
         int blockColIndex = Math.floorDiv(colIndex, 3) * 3;
 

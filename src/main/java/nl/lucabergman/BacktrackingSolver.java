@@ -10,7 +10,7 @@ public class BacktrackingSolver implements ISudokuSolver {
                 if (sudokuGame.board[rowIndex][colIndex] == null) {
                     for (int i = 1; i <= 9; i++) {
                         sudokuGame.board[rowIndex][colIndex] = i; // try value
-                        if (sudokuGame.isValidAt(rowIndex, colIndex) && recursiveSolve(sudokuGame)) return true;
+                        if (sudokuGame.isValidAt(new Coordinates(rowIndex, colIndex)) && recursiveSolve(sudokuGame)) return true;
                     }
                     sudokuGame.board[rowIndex][colIndex] = null; // reset when wrong
                     return false;
