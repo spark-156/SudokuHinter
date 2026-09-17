@@ -16,12 +16,12 @@ public class SudokuHinter {
 
     public SudokuHinter(SudokuGame sudokuGame) {
         this.sudokuGame = sudokuGame;
-        this.resetPossibleValues(); // init nested array with empty sets.
-        this.fillPossibleValues();
+        this.resetCandidates(); // init nested array with empty sets.
+        this.naiveFillCandidates();
     }
 
     // CANDIDATE NOTATION
-    private void resetPossibleValues() {
+    private void resetCandidates() {
         for (Set<Integer>[] row : this.candidates) {
             for (int col = 0; col < row.length; col++) {
                 row[col] = new HashSet<>();
@@ -29,19 +29,19 @@ public class SudokuHinter {
         }
     }
 
-    private void fillPossibleValues() {
-        // naively fill all possible values for all fields by checking if a move is valid or not.
+    private void naiveFillCandidates() {
+        // naively fill all candidates for all fields by checking if a move is valid or not.
         for (int ri = 0; ri < 9; ri++) {
             for (int ci = 0; ci < 9; ci++) {
                 Coordinates coordinates = new Coordinates(ri, ci);
                 if (this.sudokuGame.getCell(coordinates) != null) continue;
 
                 for (int candidateValue = 1; candidateValue < 10; candidateValue++) {
-                    this.sudokuGame.board[ri][ci] = candidateValue; // todo refactor to public method of SudokuGame class
+                    this.sudokuGame.setCell(coordinates, candidateValue);
                     if (this.sudokuGame.isValidAt(coordinates)) {
-                        this.candidates[ri][ci].add(candidateValue); // todo refactor to private method?
+                        this.candidates[ri][ci].add(candidateValue);
                     }
-                    this.sudokuGame.board[ri][ci] = null; // todo refactor to public method of SudokuGame class (undo func?)
+                    this.sudokuGame.setCell(coordinates, null);
                 }
             }
         }
@@ -50,11 +50,12 @@ public class SudokuHinter {
 
     public Map<Integer, Set<Integer>> candidateOccurrences(Set<Integer>[] candidates) {
         // list of sets to dictionary containing all indexes where that number occurred in list
-        // possible value : set of indexes of occurrences
+        // AKA: candidate 5 occurred at indexes: (3, 6) in the list. Candidate 6 occurred at indexes (1, 6, 7)
+        // { "candidate" : set of indexes of occurrences }
         Map<Integer, Set<Integer>> dict = new HashMap<>();
-        // loop over list of sets.
+        // loop over the candidates in the list of lists of candidates.
+        // per candidate -> add map entry and keep track of every index it occurred at.
         for (int i = 0; i < 9; i++) {
-            // loop over values of set and add index of occurrence
             for (Integer candidate : candidates[i]) {
                 Set<Integer> occurrences = dict.get(candidate);
                 if (occurrences == null) occurrences = new HashSet<>();
@@ -66,12 +67,12 @@ public class SudokuHinter {
     }
 
 
-    public Set<Integer>[] getRowCandidates(int ri) {
+    // HELPER FUNCTIONS FOR GETTING CANDIDATES
+    private Set<Integer>[] getCandidatesRow(int ri) {
         return this.candidates[ri];
     }
 
-
-    public Set<Integer>[] getColumnCandidates(int ci) {
+    private Set<Integer>[] getCandidatesColumn(int ci) {
         Set<Integer>[] col = new Set[9];
         for (int i = 0; i < 9; i++) {
             col[i] = this.candidates[i][ci];
@@ -79,8 +80,7 @@ public class SudokuHinter {
         return col;
     }
 
-
-    public Set<Integer>[] getBlockCandidates(int bi) {
+    private Set<Integer>[] getCandidatesBlock(int bi) {
         int bri = (bi / 3) * 3;
         int bci = (bi % 3) * 3;
 
@@ -108,11 +108,12 @@ public class SudokuHinter {
         return false;
     }
 
-    private void restrictCandidates(Set<Integer> values, Set<Coordinates> coordinates) {
+    private void restrictCandidates(Set<Coordinates> coordinates, Set<Integer> values) {
         // todo find out where sets get copied and accidentally mutate each other.
         // todo improve. 3 code blocks do almost exactly the same.
-        // give a set of candidates that are only allowed in a set of locations.
+        // give a set of candidates that are only allowed in a set of coordinates.
         // this function will filter out all other candidates within the same region that may no longer house these values.
+        // region is determined by the positioning of the coordinates (straight line, all within same block etc)
         boolean is_row = coordinates.stream().allMatch(l -> l.rowIndex() == coordinates.iterator().next().rowIndex());
         boolean is_col = coordinates.stream().allMatch(l -> l.columnIndex() == coordinates.iterator().next().columnIndex());
         boolean is_block = coordinates.stream().allMatch(l -> l.getBlockStartCoordinates().equals(coordinates.iterator().next().getBlockStartCoordinates()));
@@ -154,6 +155,158 @@ public class SudokuHinter {
     }
 
 
+    // HINTERS
+    public Hint findHint() {
+        // in order of how hard they are to do and what a human would do.
+        List<Supplier<Hint>> strategies = List.of(this::findNakedSingle, this::findHiddenSingle, this::findHiddenSets);
+
+        this.hint = strategies.stream().map(Supplier::get).filter(Objects::nonNull).findFirst().orElse(null);
+        return this.hint;
+    }
+
+    public void applyHint() throws Exception {
+        if (this.hint == null) return;
+        switch (this.hint) {
+            case Placement p -> {
+                this.sudokuGame.makeMove(p.cell(), p.value()); // Raises Exception if illegal move.
+                this.restrictCandidates(Set.of(p.cell()), Set.of(p.value())); // Update candidate map
+                this.candidates[p.cell().rowIndex()][p.cell().columnIndex()] = new HashSet<>(); // Update candidate map
+            }
+            case Resctriction r -> this.restrictCandidates(r.cells(), r.values());
+            default -> throw new IllegalStateException("Unexpected value: " + this.hint);
+        }
+        this.hint = null;
+    }
+
+
+    // FINDERS
+    private Placement findNakedSingle() {
+        // loop over all cells and try to find a cell that has just one candidate.
+        for (int ri = 0; ri < 9; ri++) {
+            for (int ci = 0; ci < 9; ci++) {
+                if (this.candidates[ri][ci].size() == 1) {
+                    return new Placement(new Coordinates(ri, ci), this.candidates[ri][ci].iterator().next(), HintLocation.CELL, HintType.NAKED_SINGLE);
+                }
+            }
+        }
+        return null; // Didnt find a naked single
+    }
+
+
+    private Placement findHiddenSingle() {
+        // loop over all cells in a list of candidate cells and try to find a candidate
+        // that appears in just one cell.
+
+        for (int bi = 0; bi < 9; bi++) {
+            Set<Integer>[] block = this.getCandidatesBlock(bi);
+
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(block);
+            for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
+                if (occ.getValue().size() == 1) {
+                    Coordinates coordinates = new BlockListCoordinates(bi, occ.getValue().iterator().next()).getCoordinates();
+                    return new Placement(coordinates, occ.getKey(), HintLocation.BLOCK, HintType.HIDDEN_SINGLE);
+                }
+            }
+        }
+
+        for (int ri = 0; ri < 9; ri++) {
+            Set<Integer>[] row = this.getCandidatesRow(ri);
+
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(row);
+            for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
+                if (occ.getValue().size() == 1) {
+                    return new Placement(new Coordinates(ri, occ.getValue().iterator().next()), occ.getKey(), HintLocation.ROW, HintType.HIDDEN_SINGLE);
+                }
+            }
+        }
+
+        for (int ci = 0; ci < 9; ci++) {
+            Set<Integer>[] row = this.getCandidatesColumn(ci);
+
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(row);
+            for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
+                if (occ.getValue().size() == 1) {
+                    return new Placement(new Coordinates(occ.getValue().iterator().next(), ci), occ.getKey(), HintLocation.COLUMN, HintType.HIDDEN_SINGLE);
+                }
+            }
+        }
+
+        return null; // Didnt find a hidden single.
+    }
+
+    private Resctriction findHiddenSets() {
+        // Find an arbitrary group of candidates that form a hidden set.
+        // Returns a Restriction hint if found
+        // Searches rows, columns and blocks, in that order.
+
+        // rows
+        for (int ri = 0; ri < 9; ri++) {
+            Set<Integer>[] row = this.getCandidatesRow(ri);
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(row); // map of value to what indexes it occurs at
+            // map of index sets in list to value sets.
+            // candidate value (c.v.), indexes of where c.v. occurred (i.o.)
+            // 5 (c.v.): (3, 6)(i.o.), 6 (c.v.): (1,6,7)(i.o.), 7 (c.v.): (3,6)
+            // ->
+            // (3,6)(i.o): (5, 7)(c.v.), (1,6,7)(i.o): (6)
+            // 5, 7 only occur at indexes 3 and 6 in the list. 6 can be stripped as candidate from index 6 in this list.
+            // and 5,7 can be removed as candidates from other cells in this row.
+            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()
+                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
+            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
+                // translate indexes of duplicates to coordinates and filter the regions.
+                Set<Coordinates> coords = new HashSet<>();
+                for (Integer ci : dupe.getKey()) {
+                    Coordinates coordinates = new Coordinates(ri, ci);
+                    coords.add(coordinates);
+                }
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), row)) {
+                    // also assert that the row or col or block is not completely filled yet.
+                    return new Resctriction(coords, dupe.getValue(), HintLocation.ROW, HintType.HIDDEN_SET);
+                }
+            }
+        }
+
+        // columns
+        for (int ci = 0; ci < 9; ci++) {
+            Set<Integer>[] col = this.getCandidatesColumn(ci);
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(col); // map of value to what indexes it occurs at
+            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
+                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
+            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
+                // translate indexes of duplicates to coordinates and filter the regions.
+                Set<Coordinates> coords = new HashSet<>();
+                for (Integer ri : dupe.getKey()) {
+                    Coordinates coordinates = new Coordinates(ri, ci);
+                    coords.add(coordinates);
+                }
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), col)) {
+                    return new Resctriction(coords, dupe.getValue(), HintLocation.COLUMN, HintType.HIDDEN_SET);
+                }
+            }
+        }
+
+        // blocks
+        for (int bi = 0; bi < 9; bi++) {
+            Set<Integer>[] block = this.getCandidatesBlock(bi);
+            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(block); // map of value to what indexes it occurs at
+            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
+                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
+            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
+                // translate indexes of duplicates to coordinates and filter the regions.
+                Set<Coordinates> coords = new HashSet<>();
+                for (Integer li : dupe.getKey()) {
+                    coords.add(new BlockListCoordinates(bi, li).getCoordinates());
+                }
+                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), block)) {
+                    return new Resctriction(coords, dupe.getValue(), HintLocation.BLOCK, HintType.HIDDEN_SET);
+                }
+            }
+        }
+
+        return null; // Didn't find a hidden set.
+    }
+
+
     // DESCRIBING
     public String describe() {
         StringBuilder out = new StringBuilder();
@@ -183,158 +336,5 @@ public class SudokuHinter {
             case Resctriction r when r.cells().contains(cell) -> "{" + content + "}";
             case null, default -> " " + content + " ";
         };
-    }
-
-
-    // HINTERS
-    public Hint findHint() {
-        // in order of how hard they are to do.
-        List<Supplier<Hint>> strategies = List.of(this::findNakedSingle, this::findHiddenSingle, this::findHiddenSets);
-
-        this.hint = strategies.stream().map(Supplier::get).filter(Objects::nonNull).findFirst().orElse(null);
-        return this.hint;
-    }
-
-    public void applyHint() throws Exception {
-        if (this.hint == null) return;
-
-        switch (this.hint) {
-            case Placement p -> {
-                this.sudokuGame.makeMove(p.cell(), p.value());
-                this.restrictCandidates(Set.of(p.value()), Set.of(p.cell()));
-                this.candidates[p.cell().rowIndex()][p.cell().columnIndex()] = new HashSet<>();
-            }
-            case Resctriction r -> this.restrictCandidates(r.values(), r.cells());
-            default -> throw new IllegalStateException("Unexpected value: " + this.hint);
-        }
-
-        this.hint = null;
-//        this.sudokuGame.makeMove(this.hint.(), this.hint.colIndex(), this.hint.value());
-    }
-
-
-    // FINDERS
-    private Placement findNakedSingle() {
-        // loop over all col and rows in the possible values and find a set that has just one number
-        for (int ri = 0; ri < 9; ri++) {
-            for (int ci = 0; ci < 9; ci++) {
-                if (this.candidates[ri][ci].size() == 1) {
-                    return new Placement(new Coordinates(ri, ci), this.candidates[ri][ci].iterator().next(), HintLocation.CELL, HintType.NAKED_SINGLE);
-                }
-            }
-        }
-        // Didnt find a naked single
-        return null;
-    }
-
-
-    private Placement findHiddenSingle() {
-        // look at all possible values in list
-        // if a pv only appears at one index in list then it is a hidden single.
-
-        for (int bi = 0; bi < 9; bi++) {
-            Set<Integer>[] block = this.getBlockCandidates(bi);
-
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(block);
-            for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
-                if (occ.getValue().size() == 1) {
-                    Coordinates coordinates = new BlockListCoordinates(bi, occ.getValue().iterator().next()).getCoordinates();
-                    return new Placement(coordinates, occ.getKey(), HintLocation.BLOCK, HintType.HIDDEN_SINGLE);
-                }
-            }
-        }
-
-        for (int ri = 0; ri < 9; ri++) {
-            Set<Integer>[] row = this.getRowCandidates(ri);
-
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(row);
-            for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
-                if (occ.getValue().size() == 1) {
-                    return new Placement(new Coordinates(ri, occ.getValue().iterator().next()), occ.getKey(), HintLocation.ROW, HintType.HIDDEN_SINGLE);
-                }
-            }
-        }
-
-        for (int ci = 0; ci < 9; ci++) {
-            Set<Integer>[] row = this.getColumnCandidates(ci);
-
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(row);
-            for (Map.Entry<Integer, Set<Integer>> occ : occurrences.entrySet()) {
-                if (occ.getValue().size() == 1) {
-                    return new Placement(new Coordinates(occ.getValue().iterator().next(), ci), occ.getKey(), HintLocation.COLUMN, HintType.HIDDEN_SINGLE);
-                }
-            }
-        }
-
-        // Didnt find a hidden single.
-        return null;
-    }
-
-    // todo make return type a hint
-    private Resctriction findHiddenSets() {
-        // returns true if it found a hidden set (re-run again)
-        // find hidden pairs in a Sudoku
-        // assume possible values have already been set.
-
-        // loop over cols, rows and boxes and try to find naked pairs.
-        // caller of this function should keep calling until all options have been exhausted.
-
-        // rows
-        for (int ri = 0; ri < 9; ri++) {
-            Set<Integer>[] row = this.getRowCandidates(ri);
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(row); // map of value to what indexes it occurs at
-            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
-                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
-            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
-                // translate indexes of duplicates to coordinates and filter the regions.
-                Set<Coordinates> coords = new HashSet<>();
-                for (Integer ci : dupe.getKey()) {
-                    Coordinates coordinates = new Coordinates(ri, ci);
-                    coords.add(coordinates);
-                }
-                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), row)) {
-                    // also assert that the row or col or block is not completely filled yet.
-                    return new Resctriction(coords, dupe.getValue(), HintLocation.ROW, HintType.HIDDEN_SET);
-                }
-            }
-        }
-        // column
-        for (int ci = 0; ci < 9; ci++) {
-            Set<Integer>[] col = this.getColumnCandidates(ci);
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(col); // map of value to what indexes it occurs at
-            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
-                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
-            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
-                // translate indexes of duplicates to coordinates and filter the regions.
-                Set<Coordinates> coords = new HashSet<>();
-                for (Integer ri : dupe.getKey()) {
-                    Coordinates coordinates = new Coordinates(ri, ci);
-                    coords.add(coordinates);
-                }
-                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), col)) {
-                    return new Resctriction(coords, dupe.getValue(), HintLocation.COLUMN, HintType.HIDDEN_SET);
-                }
-            }
-        }
-        // block
-        for (int bi = 0; bi < 9; bi++) {
-            Set<Integer>[] block = this.getBlockCandidates(bi);
-            Map<Integer, Set<Integer>> occurrences = this.candidateOccurrences(block); // map of value to what indexes it occurs at
-            Map<Set<Integer>, Set<Integer>> duplicates = occurrences.entrySet()// map of indexes in list to values
-                    .stream().collect(groupingBy(Map.Entry::getValue, mapping(Map.Entry::getKey, toSet())));
-            for (Map.Entry<Set<Integer>, Set<Integer>> dupe : duplicates.entrySet()) {
-                // translate indexes of duplicates to coordinates and filter the regions.
-                Set<Coordinates> coords = new HashSet<>();
-                for (Integer li : dupe.getKey()) {
-                    coords.add(new BlockListCoordinates(bi, li).getCoordinates());
-                }
-                if (coords.size() > 1 && dupe.getValue().size() == coords.size() && assertSubsetOfRegion(dupe.getValue(), block)) {
-                    return new Resctriction(coords, dupe.getValue(), HintLocation.BLOCK, HintType.HIDDEN_SET);
-                }
-            }
-        }
-
-        // Didnt find a Restriction Hint
-        return null;
     }
 }
